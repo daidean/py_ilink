@@ -1,57 +1,60 @@
-import base64
 import json
-from pathlib import Path
-import secrets
 import time
+import base64
+import secrets
+import requests
+
 from typing import Any
+from pathlib import Path
+from datetime import datetime
 from loguru import logger
 from qrcode import QRCode
-
-import requests
 
 
 class ILink:
     endpoint: str = "https://ilinkai.weixin.qq.com"
-    status: dict[str, Any] = {}
-    status_cache = Path("cache/bot_login_status.json")
+    login_info: dict[str, Any] = {}
+    login_info_path = Path("cache/bot_login_info.json")
 
     def __init__(self) -> None:
-        self.status = self.bot_login_with_cache()
+        self.login_info = self.bot_login_with_cache()
 
     def bot_login_with_cache(self) -> dict[str, Any]:
-        if not self.status_cache.exists():
+        if not self.login_info_path.exists():
             return {}
-        return json.loads(self.status_cache.read_text())
+        return json.loads(self.login_info_path.read_text())
 
     def bot_login(self) -> dict[str, Any]:
-        qr_url = f"{self.endpoint}/ilink/bot/get_bot_qrcode?bot_type=3"
-        qr = requests.post(qr_url).json()
+        qr_get_path = "/ilink/bot/get_bot_qrcode?bot_type=3"
+        qr_get_url = f"{self.endpoint}{qr_get_path}"
+        qr = requests.post(qr_get_url).json()
         logger.info(f"BOT未登录, 待授权二维码信息: {qr}")
 
-        qr_code = qr.get("qrcode", "")
-        qr_link = qr.get("qrcode_img_content", "")
-
+        qr_code, qr_link = qr["qrcode"], qr["qrcode_img_content"]
         qr_img = QRCode()
         qr_img.add_data(qr_link)
         qr_img.print_ascii()
 
+        logger.info("BOT未登录, 等待扫描二维码授权")
+        qr_query_path = f"/ilink/bot/get_qrcode_status?qrcode={qr_code}"
+        qr_query_url = f"{self.endpoint}{qr_query_path}"
         while True:
             time.sleep(3)
-            qr_resp = requests.post(
-                f"{self.endpoint}/ilink/bot/get_qrcode_status?qrcode={qr_code}"
-            ).json()
-            logger.debug(f"BOT登录中 {qr_resp}")
+            qr_resp = requests.post(qr_query_url).json()
+            logger.debug(f"BOT登录状态: {qr_resp}")
 
-            qr_status = qr_resp.get("status", "")
-            if "confirmed" == qr_status:
+            if "confirmed" == qr_resp["status"]:
+                qr_resp["get_updates_buf"] = ""
                 logger.info(f"BOT登录成功 {qr_resp}")
-                self.status = qr_resp
-                self.status_cache.write_text(json.dumps(qr_resp))
                 return qr_resp
 
-            if "expired" == qr_status:
+            if "expired" == qr_resp["status"]:
                 logger.warning(f"BOT登录超时 {qr_resp} ")
                 return {}
+
+    def save_login_info(self, login_info: dict[str, Any]) -> None:
+        self.login_info = login_info
+        self.login_info_path.write_text(json.dumps(login_info))
 
     def rand_uin(self) -> str:
         rand_n = secrets.token_bytes(4)
@@ -62,7 +65,7 @@ class ILink:
         return {
             "Content-Type": "application/json",
             "AuthorizationType": "ilink_bot_token",
-            "Authorization": f"Bearer {self.status['bot_token']}",
+            "Authorization": f"Bearer {self.login_info['bot_token']}",
             "X-WECHAT-UIN": self.rand_uin(),
         }
 
@@ -71,10 +74,10 @@ class ILink:
         resp = requests.post(url, headers=self.headers(), json=data)
         return resp.json()
 
-    def get_updates(self, updates_buf: str = "") -> dict[str, Any]:
+    def get_updates(self, get_updates_buf: str = "") -> dict[str, Any]:
         path = "/ilink/bot/getupdates"
         data = {
-            "get_updates_buf": updates_buf,
+            "get_updates_buf": get_updates_buf,
             "base_info": {"channel_version": "1.0.2"},
         }
         return self.call_api(path, data)
@@ -103,10 +106,9 @@ class ILink:
         path = "/ilink/bot/getuploadurl"
         print(path)
 
-    def get_config(self) -> dict[str, Any]:
+    def get_config(self):
         path = "/ilink/bot/getconfig"
-        data = {"ilink_user_id": self.status["ilink_user_id"]}
-        return self.call_api(path, data)
+        print(path)
 
     def send_typing(self):
         path = "/ilink/bot/sendtyping"
@@ -116,19 +118,24 @@ class ILink:
 if __name__ == "__main__":
     ilink = ILink()
 
-    # print(ilink.bot_login())
-    # print(ilink.get_config())
+    login_info = ilink.bot_login()
+    ilink.save_login_info(login_info)
+    logger.info(login_info)
 
-    # result = ilink.get_updates()
-    # print(result)
+    while True:
+        get_updates_buf = ilink.login_info["get_updates_buf"]
+        updates = ilink.get_updates(get_updates_buf)
+        logger.info(updates)
 
-    # messages = [msg for msg in result["msgs"]]
-    # message = messages[0]
+        ilink.login_info["get_updates_buf"] = updates["get_updates_buf"]
+        ilink.save_login_info(ilink.login_info)
 
-    # print(
-    #     ilink.send_message(
-    #         message["from_user_id"],
-    #         message["context_token"],
-    #         ["hi1 from bot"],
-    #     )
-    # )
+        if not updates["msgs"]:
+            continue
+
+        messages = [msg for msg in updates["msgs"]]
+        for message in messages:
+            reply = f"Hello World - {datetime.now()}"
+            reply_to = message["from_user_id"]
+            reply_ct = message["context_token"]
+            ilink.send_message(reply_to, reply_ct, [reply])
