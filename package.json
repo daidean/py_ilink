@@ -1,0 +1,7 @@
+{
+	"dependencies": {
+		"@tencent-weixin/openclaw-weixin": "^1.0.2",
+		"@tencent-weixin/openclaw-weixin-cli": "^1.0.2",
+		"@wecom/wecom-openclaw-cli": "^1.0.20"
+	}
+}
