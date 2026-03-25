@@ -7,24 +7,39 @@ import requests
 from typing import Any
 from pathlib import Path
 from datetime import datetime
-from loguru import logger
 from qrcode import QRCode
+from loguru import logger
 
 
 class ILink:
     endpoint: str = "https://ilinkai.weixin.qq.com"
-    login_info: dict[str, Any] = {}
     login_info_path = Path("cache/bot_login_info.json")
+    typing_ticket_path = Path("cache/bot_typing_ticket.json")
 
     def __init__(self) -> None:
-        self.login_info = self.bot_login_with_cache()
+        self.login_info_cache = self.login_with_cache()
+        self.typing_ticket_cache = self.typing_ticket_with_cache()
 
-    def bot_login_with_cache(self) -> dict[str, Any]:
-        if not self.login_info_path.exists():
+    """ 工具方法 """
+
+    def typing_ticket_with_cache(self) -> dict[str, Any]:
+        if not self.typing_ticket_path.exists():
             return {}
+        return json.loads(self.typing_ticket_path.read_text())
+
+    def save_typing_ticket(self, typing_ticket: dict[str, Any]) -> None:
+        self.typing_ticket_cache = typing_ticket
+        self.typing_ticket_path.write_text(json.dumps(typing_ticket))
+
+    def login_with_cache(self) -> dict[str, Any]:
+        if not self.login_info_path.exists():
+            logger.warning("BOT登录, 未找到登录缓存")
+            return self.login()
+
+        logger.info("BOT登录, 已加载登录缓存")
         return json.loads(self.login_info_path.read_text())
 
-    def bot_login(self) -> dict[str, Any]:
+    def login(self) -> dict[str, Any]:
         qr_get_path = "/ilink/bot/get_bot_qrcode?bot_type=3"
         qr_get_url = f"{self.endpoint}{qr_get_path}"
         qr = requests.post(qr_get_url).json()
@@ -53,7 +68,7 @@ class ILink:
                 return {}
 
     def save_login_info(self, login_info: dict[str, Any]) -> None:
-        self.login_info = login_info
+        self.login_info_cache = login_info
         self.login_info_path.write_text(json.dumps(login_info))
 
     def rand_uin(self) -> str:
@@ -61,25 +76,33 @@ class ILink:
         rand_s = base64.b64encode(rand_n).decode()
         return rand_s
 
+    def time_ms(self) -> int:
+        return int(time.time() * 1000)
+
     def headers(self) -> dict[str, str]:
         return {
             "Content-Type": "application/json",
             "AuthorizationType": "ilink_bot_token",
-            "Authorization": f"Bearer {self.login_info['bot_token']}",
+            "Authorization": f"Bearer {self.login_info_cache['bot_token']}",
             "X-WECHAT-UIN": self.rand_uin(),
         }
 
+    def client_id(self) -> str:
+        return f"openclaw-weixin:{self.time_ms}-{secrets.token_hex(4)}"
+
+    """ 接口调用 """
+
     def call_api(self, path: str, data: dict[str, Any]) -> dict[str, Any]:
         url = f"{self.endpoint}{path}"
+        data.update({"base_info": {"channel_version": "1.0.2"}})
         resp = requests.post(url, headers=self.headers(), json=data)
         return resp.json()
 
+    """ 功能方法 """
+
     def get_updates(self, get_updates_buf: str = "") -> dict[str, Any]:
         path = "/ilink/bot/getupdates"
-        data = {
-            "get_updates_buf": get_updates_buf,
-            "base_info": {"channel_version": "1.0.2"},
-        }
+        data = {"get_updates_buf": get_updates_buf}
         return self.call_api(path, data)
 
     def send_message(
@@ -91,13 +114,14 @@ class ILink:
         path = "/ilink/bot/sendmessage"
         data = {
             "msg": {
+                "from_user_id": "",
                 "to_user_id": to_user_id,
-                "message_type": 2,
-                "message_state": 2,
+                "client_id": self.client_id(),
+                "message_type": 2,  # `1` = USER, `2` = BOT
+                "message_state": 2,  # `0` = NEW, `1` = GENERATING, `2` = FINISH
                 "context_token": context_token,
-                "item_list": [
-                    {"type": 1, "text_item": {"text": message}} for message in messages
-                ],
+                # item_list.[].type `1` TEXT, `2` IMAGE, `3` VOICE, `4` FILE, `5` VIDEO
+                "item_list": [{"type": 1, "text_item": {"text": m}} for m in messages],
             }
         }
         return self.call_api(path, data)
@@ -106,36 +130,76 @@ class ILink:
         path = "/ilink/bot/getuploadurl"
         print(path)
 
-    def get_config(self):
+    def get_config(self, ilink_user_id: str, context_token: str) -> dict[str, Any]:
         path = "/ilink/bot/getconfig"
-        print(path)
+        data = {
+            "ilink_user_id": ilink_user_id,
+            "context_token": context_token,
+        }
+        return self.call_api(path, data)
 
-    def send_typing(self):
+    def send_typing(
+        self,
+        ilink_user_id: str,
+        typing_ticket: str,
+        status: int,
+    ) -> dict[str, Any]:
         path = "/ilink/bot/sendtyping"
-        print(path)
+        data = {
+            "ilink_user_id": ilink_user_id,
+            "typing_ticket": typing_ticket,
+            "status": status,
+        }
+        return self.call_api(path, data)
+
+    def get_typing_ticket(self, ilink_user_id: str, context_token: str) -> str:
+        now_time = time.time()
+        typing_ticket = self.typing_ticket_cache.get(ilink_user_id)
+
+        if typing_ticket and now_time < typing_ticket["valid_time"]:
+            return typing_ticket["typing_ticket"]
+
+        typing_ticket = self.get_config(ilink_user_id, context_token)
+        typing_ticket.update({"valid_time": now_time + 60 * 60 * 24})
+
+        self.typing_ticket_cache[ilink_user_id] = typing_ticket
+        self.save_typing_ticket(self.typing_ticket_cache)
+
+        return typing_ticket["typing_ticket"]
 
 
 if __name__ == "__main__":
     ilink = ILink()
 
-    login_info = ilink.bot_login()
+    login_info = ilink.login()
     ilink.save_login_info(login_info)
     logger.info(login_info)
 
     while True:
-        get_updates_buf = ilink.login_info["get_updates_buf"]
+        get_updates_buf = ilink.login_info_cache["get_updates_buf"]
         updates = ilink.get_updates(get_updates_buf)
         logger.info(updates)
 
-        ilink.login_info["get_updates_buf"] = updates["get_updates_buf"]
-        ilink.save_login_info(ilink.login_info)
+        ilink.login_info_cache["get_updates_buf"] = updates["get_updates_buf"]
+        ilink.save_login_info(ilink.login_info_cache)
 
         if not updates["msgs"]:
             continue
 
-        messages = [msg for msg in updates["msgs"]]
-        for message in messages:
+        for message in updates["msgs"]:
+            logger.info(message)
             reply = f"Hello World - {datetime.now()}"
             reply_to = message["from_user_id"]
             reply_ct = message["context_token"]
-            ilink.send_message(reply_to, reply_ct, [reply])
+
+            reply_typing_ticket = ilink.get_typing_ticket(reply_to, reply_ct)
+            logger.info(reply_typing_ticket)
+
+            typing_resp = ilink.send_typing(reply_to, reply_typing_ticket, 1)
+            logger.info(typing_resp)
+
+            reply_resp = ilink.send_message(reply_to, reply_ct, [reply])
+            logger.info(reply_resp)
+
+            typing_resp = ilink.send_typing(reply_to, reply_typing_ticket, 2)
+            logger.info(typing_resp)
