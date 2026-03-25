@@ -9,14 +9,14 @@ importers:
   .:
     dependencies:
       '@tencent-weixin/openclaw-weixin':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: ^1.0.3
+        version: 1.0.3
       '@tencent-weixin/openclaw-weixin-cli':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: ^1.0.3
+        version: 1.0.3
       '@wecom/wecom-openclaw-cli':
-        specifier: ^1.0.20
-        version: 1.0.20
+        specifier: ^1.0.22
+        version: 1.0.22
 
 packages:
 
@@ -29,17 +29,17 @@ packages:
       '@types/node':
         optional: true
 
-  '@tencent-weixin/openclaw-weixin-cli@1.0.2':
-    resolution: {integrity: sha512-cK7YOrPJyUGkPXwYLE/5UtKdfhUBE06Ih66xWTlVxUGGwNXy8CzwHYsAa66F7/AAA7vQMGjb/lVZyTHIqsYbNQ==}
+  '@tencent-weixin/openclaw-weixin-cli@1.0.3':
+    resolution: {integrity: sha512-CFFkiZ2vfiS9rjDn+ZEUYF6ZCTvUMT0dKGykDDMEOMVKlw7s5umL5N760nP9Xl57dGEVLrno/f0CXpAN7Dd9xw==}
     engines: {node: '>=22'}
     hasBin: true
 
-  '@tencent-weixin/openclaw-weixin@1.0.2':
-    resolution: {integrity: sha512-kYPEowHB/0VWt9nQFee/AS6Fb+jbnu38wjkgZDBdKTuJoBL0IBW2obQ0ymgFKBFJJL9rDwnFrb/17ORGZD/X8Q==}
+  '@tencent-weixin/openclaw-weixin@1.0.3':
+    resolution: {integrity: sha512-TOo9rb5gt3ce3lJEulFT5Ta4/8ocWkR40wzM7lZ8OM3/fjTk3UHYeNjHmDcZlLeg93XYJKdVUFUEiujrf8zMYw==}
     engines: {node: '>=22'}
 
-  '@wecom/wecom-openclaw-cli@1.0.20':
-    resolution: {integrity: sha512-OeTbJmMTVSBnkOstUvjS8Dh/F+VdVXgXkIVpPWoQapm/IIC/6Wb4ulOaGLeJscd7Slesr1LCkdpdcrpjZnDF4g==}
+  '@wecom/wecom-openclaw-cli@1.0.22':
+    resolution: {integrity: sha512-BHkKnTJ6facVsFWqe//nopisLRD4yFArm9WXI45GgGtkoUHF3KzUtAYU05mI3YbhKien5UOmsSP9hOLMgEw0uA==}
     hasBin: true
 
   ansi-escapes@4.3.2:
@@ -325,14 +325,14 @@ snapshots:
       chardet: 2.1.1
       iconv-lite: 0.7.2
 
-  '@tencent-weixin/openclaw-weixin-cli@1.0.2': {}
+  '@tencent-weixin/openclaw-weixin-cli@1.0.3': {}
 
-  '@tencent-weixin/openclaw-weixin@1.0.2':
+  '@tencent-weixin/openclaw-weixin@1.0.3':
     dependencies:
       qrcode-terminal: 0.12.0
       zod: 4.3.6
 
-  '@wecom/wecom-openclaw-cli@1.0.20':
+  '@wecom/wecom-openclaw-cli@1.0.22':
     dependencies:
       chalk: 4.1.2
       commander: 14.0.3
