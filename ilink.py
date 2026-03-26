@@ -91,7 +91,7 @@ class ILink:
         }
 
     def client_id(self) -> str:
-        return f"openclaw-weixin:{self.time_ms}-{secrets.token_hex(4)}"
+        return f"openclaw-weixin:{self.time_ms()}-{secrets.token_hex(4)}"
 
     def message_from_text(self, message: str) -> dict[str, Any]:
         return {"type": 1, "text_item": {"text": message}}
