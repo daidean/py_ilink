@@ -94,7 +94,10 @@ class ILink:
         return f"openclaw-weixin:{self.time_ms()}-{secrets.token_hex(4)}"
 
     def message_from_text(self, message: str) -> dict[str, Any]:
-        return {"type": 1, "text_item": {"text": message}}
+        return {
+            "type": 1,  # 消息发送的类型 1：文字
+            "text_item": {"text": message},
+        }
 
     def message_from_image(self): ...  # type 2
     def message_from_voice(self): ...  # type 3
