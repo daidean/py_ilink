@@ -76,7 +76,7 @@ class ILink:
         rand_s = base64.b64encode(rand_n).decode()
         return rand_s
 
-    def rand_file_key(self, byte_count: int) -> str:
+    def rand_file_key(self, byte_count: int = 16) -> str:
         return secrets.token_hex(byte_count)
 
     def time_ms(self) -> int:
@@ -109,7 +109,7 @@ class ILink:
         resp = requests.post(url, headers=self.headers(), json=data)
         return resp.json()
 
-    """ 功能方法 """
+    """ 协议方法 """
 
     def get_updates(self, get_updates_buf: str = "") -> dict[str, Any]:
         path = "/ilink/bot/getupdates"
@@ -136,9 +136,27 @@ class ILink:
         }
         return self.call_api(path, data)
 
-    def get_upload_url(self):
+    def get_upload_url(
+        self,
+        media_type: int,
+        to_user_id: str,
+        rawsize: int,
+        rawfilemd5: str,
+        filesize: int,
+        aeskey: str,
+    ):
         path = "/ilink/bot/getuploadurl"
-        print(path)
+        data = {
+            "filekey": self.rand_file_key(),
+            "media_type": media_type,
+            "to_user_id": to_user_id,
+            "rawsize": rawsize,
+            "rawfilemd5": rawfilemd5,
+            "filesize": filesize,
+            "no_need_thumb": True,
+            "aeskey": aeskey,
+        }
+        return self.call_api(path, data)
 
     def get_config(self, ilink_user_id: str, context_token: str) -> dict[str, Any]:
         path = "/ilink/bot/getconfig"
