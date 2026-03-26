@@ -141,6 +141,7 @@ class ILink:
 
     def get_upload_url(
         self,
+        filekey: str,
         media_type: int,
         to_user_id: str,
         rawsize: int,
@@ -150,7 +151,7 @@ class ILink:
     ):
         path = "/ilink/bot/getuploadurl"
         data = {
-            "filekey": self.rand_file_key(),
+            "filekey": filekey,
             "media_type": media_type,
             "to_user_id": to_user_id,
             "rawsize": rawsize,
