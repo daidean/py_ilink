@@ -90,6 +90,14 @@ class ILink:
     def client_id(self) -> str:
         return f"openclaw-weixin:{self.time_ms}-{secrets.token_hex(4)}"
 
+    def message_from_text(self, message: str) -> dict[str, Any]:
+        return {"type": 1, "text_item": {"text": message}}
+
+    def message_from_image(self): ...  # type 2
+    def message_from_voice(self): ...  # type 3
+    def message_from_file(self): ...  # type 4
+    def message_from_video(self): ...  # type 5
+
     """ 接口调用 """
 
     def call_api(self, path: str, data: dict[str, Any]) -> dict[str, Any]:
@@ -109,19 +117,18 @@ class ILink:
         self,
         to_user_id: str,
         context_token: str,
-        messages: list[str],
+        message: dict[str, Any],
     ) -> dict[str, Any]:
         path = "/ilink/bot/sendmessage"
         data = {
             "msg": {
-                "from_user_id": "",
+                "from_user_id": self.login_info_cache["ilink_bot_id"],
                 "to_user_id": to_user_id,
                 "client_id": self.client_id(),
                 "message_type": 2,  # `1` = USER, `2` = BOT
                 "message_state": 2,  # `0` = NEW, `1` = GENERATING, `2` = FINISH
                 "context_token": context_token,
-                # item_list.[].type `1` TEXT, `2` IMAGE, `3` VOICE, `4` FILE, `5` VIDEO
-                "item_list": [{"type": 1, "text_item": {"text": m}} for m in messages],
+                "item_list": [message],
             }
         }
         return self.call_api(path, data)
@@ -188,7 +195,7 @@ if __name__ == "__main__":
 
         for message in updates["msgs"]:
             logger.info(message)
-            reply = f"Hello World - {datetime.now()}"
+            reply = ilink.message_from_text(f"Hello World - {datetime.now()}")
             reply_to = message["from_user_id"]
             reply_ct = message["context_token"]
 
@@ -198,7 +205,7 @@ if __name__ == "__main__":
             typing_resp = ilink.send_typing(reply_to, reply_typing_ticket, 1)
             logger.info(typing_resp)
 
-            reply_resp = ilink.send_message(reply_to, reply_ct, [reply])
+            reply_resp = ilink.send_message(reply_to, reply_ct, reply)
             logger.info(reply_resp)
 
             typing_resp = ilink.send_typing(reply_to, reply_typing_ticket, 2)
