@@ -1,7 +1,8 @@
-import json
 import time
+import json
 import base64
 import secrets
+import hashlib
 import requests
 
 from typing import Any
@@ -10,17 +11,32 @@ from datetime import datetime
 from qrcode import QRCode
 from loguru import logger
 
+from cryptography.hazmat.primitives import padding
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
 
 class ILink:
     endpoint: str = "https://ilinkai.weixin.qq.com"
+    cdn_endpoint: str = "https://novac2c.cdn.weixin.qq.com"
     login_info_path = Path("cache/bot_login_info.json")
     typing_ticket_path = Path("cache/bot_typing_ticket.json")
+    file_message_path = Path("cache/bot_upload_files.json")
 
     def __init__(self) -> None:
         self.login_info_cache = self.login_with_cache()
         self.typing_ticket_cache = self.typing_ticket_with_cache()
+        self.file_message_cache = self.file_message_with_cache()
 
     """ 工具方法 """
+
+    def file_message_with_cache(self) -> dict[str, Any]:
+        if not self.file_message_path.exists():
+            return {}
+        return json.loads(self.file_message_path.read_text())
+
+    def save_file_message(self, file_message: dict[str, Any]) -> None:
+        self.file_message_cache = file_message
+        self.file_message_path.write_text(json.dumps(file_message))
 
     def typing_ticket_with_cache(self) -> dict[str, Any]:
         if not self.typing_ticket_path.exists():
@@ -93,16 +109,105 @@ class ILink:
     def client_id(self) -> str:
         return f"openclaw-weixin:{self.time_ms()}-{secrets.token_hex(4)}"
 
+    """ 工具方法: 消息格式化 """
+
     def message_from_text(self, message: str) -> dict[str, Any]:
         return {
             "type": 1,  # 消息发送的类型 1：文字
             "text_item": {"text": message},
         }
 
-    def message_from_image(self): ...  # type 2
+    def message_from_image(self, file_path: str, to_user_id: str):
+        file = Path(file_path)
+        if not file.exists():
+            return self.message_from_text(f"<img {file_path}>")
+
+        file_md5 = hashlib.md5(file.read_bytes()).hexdigest()
+        file_cache_tag = f"{file_md5}|{to_user_id}"
+        if self.file_message_cache.get(file_cache_tag):
+            logger.debug(f"hit cache: {self.file_message_cache[file_cache_tag]}")
+            return self.file_message_cache[file_cache_tag]
+
+        filekey = self.rand_file_key()
+        aeskey = secrets.token_bytes(16)
+
+        upload_request = self.get_upload_url(
+            filekey,
+            media_type=1,  # 文件上传的类型 1：图片
+            to_user_id=to_user_id,
+            rawsize=file.stat().st_size,
+            rawfilemd5=file_md5,
+            filesize=((file.stat().st_size // 16) + 1) * 16,
+            aeskey=aeskey.hex(),
+        )
+        logger.debug(upload_request)
+
+        upload_param = upload_request["upload_param"]
+        upload_payload = self.encrypt_aes_ecb(file.read_bytes(), aeskey)
+
+        encrypt_query_param = self.upload_file_to_cdn(
+            upload_param,
+            filekey,
+            upload_payload,
+        )
+
+        if not encrypt_query_param:
+            return self.message_from_text(f"<img {file_path}>")
+
+        message = {
+            "type": 2,  # 消息发送的类型 2：图片
+            "image_item": {
+                "media": {
+                    "encrypt_query_param": encrypt_query_param,
+                    "aes_key": base64.b64encode(aeskey.hex().encode()).decode(),
+                    "encrypt_type": 1,
+                },
+            },
+        }
+
+        self.file_message_cache[file_cache_tag] = message
+        self.save_file_message(self.file_message_cache)
+        logger.debug(message)
+
+        return message
+
     def message_from_voice(self): ...  # type 3
     def message_from_file(self): ...  # type 4
     def message_from_video(self): ...  # type 5
+
+    """ 工具方法：文件加解密 """
+
+    def encrypt_aes_ecb(self, payload: bytes, key: bytes) -> bytes:
+        padder = padding.PKCS7(128).padder()
+        padded = padder.update(payload) + padder.finalize()
+        cipher = Cipher(algorithms.AES(key), modes.ECB())
+        encryptor = cipher.encryptor()
+        return encryptor.update(padded) + encryptor.finalize()
+
+    def decrypt_aes_ecb(self, payload: bytes, key: bytes) -> bytes:
+        cipher = Cipher(algorithms.AES(key), modes.ECB())
+        decryptor = cipher.decryptor()
+        padded = decryptor.update(payload) + decryptor.finalize()
+        unpadder = padding.PKCS7(128).unpadder()
+        return unpadder.update(padded) + unpadder.finalize()
+
+    """ 工具方法：cdn上传下载 """
+
+    def upload_file_to_cdn(self, param: str, filekey: str, payload: bytes) -> str:
+        url = f"{self.cdn_endpoint}/c2c/upload"
+        url += f"?encrypted_query_param={param}"
+        url += f"&filekey={filekey}"
+        headers = {"Content-Type": "application/octet-stream"}
+
+        resp = requests.post(url, headers=headers, data=payload)
+        logger.debug(resp)
+
+        if resp.status_code != 200:
+            logger.error(resp.headers)
+
+        return resp.headers.get("x-encrypted-param", "")
+
+    def download_file_on_cdn(self): ...
 
     """ 接口调用 """
 
@@ -224,5 +329,9 @@ if __name__ == "__main__":
             reply_ct = message["context_token"]
 
             reply = ilink.message_from_text(f"Hello World - {datetime.now()}")
+            reply_resp = ilink.send_message(reply_to, reply_ct, reply)
+            logger.info(reply_resp)
+
+            reply = ilink.message_from_image("cache/images/哈基耶.jpg", reply_to)
             reply_resp = ilink.send_message(reply_to, reply_ct, reply)
             logger.info(reply_resp)

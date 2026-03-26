@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "cryptography>=46.0.6",
     "loguru>=0.7.3",
     "qrcode[pil]>=8.2",
     "requests>=2.32.5",
