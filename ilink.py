@@ -76,6 +76,9 @@ class ILink:
         rand_s = base64.b64encode(rand_n).decode()
         return rand_s
 
+    def rand_file_key(self, byte_count: int) -> str:
+        return secrets.token_hex(byte_count)
+
     def time_ms(self) -> int:
         return int(time.time() * 1000)
 
