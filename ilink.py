@@ -220,18 +220,9 @@ if __name__ == "__main__":
 
         for message in updates["msgs"]:
             logger.info(message)
-            reply = ilink.message_from_text(f"Hello World - {datetime.now()}")
             reply_to = message["from_user_id"]
             reply_ct = message["context_token"]
 
-            reply_typing_ticket = ilink.get_typing_ticket(reply_to, reply_ct)
-            logger.info(reply_typing_ticket)
-
-            typing_resp = ilink.send_typing(reply_to, reply_typing_ticket, 1)
-            logger.info(typing_resp)
-
+            reply = ilink.message_from_text(f"Hello World - {datetime.now()}")
             reply_resp = ilink.send_message(reply_to, reply_ct, reply)
             logger.info(reply_resp)
-
-            typing_resp = ilink.send_typing(reply_to, reply_typing_ticket, 2)
-            logger.info(typing_resp)
