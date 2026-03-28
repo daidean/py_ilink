@@ -193,6 +193,64 @@ class ILink:
 
     """ 工具方法：cdn上传下载 """
 
+    def parse_file_and_upload(
+        self,
+        file: Path,
+        file_type: int,
+        to_file_type: int,
+        to_user_id: str,
+    ) -> dict[str, Any]:
+        file_md5 = hashlib.md5(file.read_bytes()).hexdigest()
+        file_cache_tag = f"{file_md5}|{to_user_id}"
+
+        if self.file_message_cache.get(file_cache_tag):
+            file_cache: dict[str, Any] = self.file_message_cache[file_cache_tag]
+            logger.debug(f"hit cache: {file_cache}")
+            return file_cache
+
+        filekey = self.rand_file_key()
+        aeskey = secrets.token_bytes(16)
+
+        upload_request = self.get_upload_url(
+            filekey,
+            media_type=file_type,  # 文件上传的类型 1：图片 2：视频 3：文件 4：语音
+            to_user_id=to_user_id,
+            rawsize=file.stat().st_size,
+            rawfilemd5=file_md5,
+            filesize=((file.stat().st_size // 16) + 1) * 16,
+            aeskey=aeskey.hex(),
+        )
+        logger.debug(upload_request)
+
+        upload_param = upload_request["upload_param"]
+        upload_payload = self.encrypt_aes_ecb(file.read_bytes(), aeskey)
+
+        encrypt_query_param = self.upload_file_to_cdn(
+            upload_param,
+            filekey,
+            upload_payload,
+        )
+
+        if not encrypt_query_param:
+            return self.message_from_text(f"<img {file}>")
+
+        message: dict[str, Any] = {
+            "type": to_file_type,  # 文件发送的消息类型 1：文字 2：图片 3：语言 4：文件 5：视频
+            "image_item": {
+                "media": {
+                    "encrypt_query_param": encrypt_query_param,
+                    "aes_key": base64.b64encode(aeskey.hex().encode()).decode(),
+                    "encrypt_type": 1,
+                },
+            },
+        }
+
+        self.file_message_cache[file_cache_tag] = message
+        self.save_file_message(self.file_message_cache)
+        logger.debug(message)
+
+        return message
+
     def upload_file_to_cdn(self, param: str, filekey: str, payload: bytes) -> str:
         url = f"{self.cdn_endpoint}/c2c/upload"
         url += f"?encrypted_query_param={param}"
