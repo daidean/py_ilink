@@ -122,51 +122,12 @@ class ILink:
         if not file.exists():
             return self.message_from_text(f"<img {file_path}>")
 
-        file_md5 = hashlib.md5(file.read_bytes()).hexdigest()
-        file_cache_tag = f"{file_md5}|{to_user_id}"
-        if self.file_message_cache.get(file_cache_tag):
-            logger.debug(f"hit cache: {self.file_message_cache[file_cache_tag]}")
-            return self.file_message_cache[file_cache_tag]
-
-        filekey = self.rand_file_key()
-        aeskey = secrets.token_bytes(16)
-
-        upload_request = self.get_upload_url(
-            filekey,
-            media_type=1,  # 文件上传的类型 1：图片
+        message = self.parse_file_and_upload(
+            file=file,
+            file_type=1,
+            to_file_type=2,
             to_user_id=to_user_id,
-            rawsize=file.stat().st_size,
-            rawfilemd5=file_md5,
-            filesize=((file.stat().st_size // 16) + 1) * 16,
-            aeskey=aeskey.hex(),
         )
-        logger.debug(upload_request)
-
-        upload_param = upload_request["upload_param"]
-        upload_payload = self.encrypt_aes_ecb(file.read_bytes(), aeskey)
-
-        encrypt_query_param = self.upload_file_to_cdn(
-            upload_param,
-            filekey,
-            upload_payload,
-        )
-
-        if not encrypt_query_param:
-            return self.message_from_text(f"<img {file_path}>")
-
-        message = {
-            "type": 2,  # 消息发送的类型 2：图片
-            "image_item": {
-                "media": {
-                    "encrypt_query_param": encrypt_query_param,
-                    "aes_key": base64.b64encode(aeskey.hex().encode()).decode(),
-                    "encrypt_type": 1,
-                },
-            },
-        }
-
-        self.file_message_cache[file_cache_tag] = message
-        self.save_file_message(self.file_message_cache)
         logger.debug(message)
 
         return message
