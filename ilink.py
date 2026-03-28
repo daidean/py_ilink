@@ -133,7 +133,46 @@ class ILink:
             "image_item": {"media": media},
         }
 
-    def message_from_voice(self): ...  # type 3
+    def message_from_voice(
+        self,
+        file_path: str,
+        to_user_id: str,
+        encode_type: int = 0,
+        bits_per_sample: int = 0,
+        sample_rate: int = 0,
+        playtime: int = 0,
+        text: str = "",
+    ) -> dict[str, Any]:
+        file = Path(file_path)
+        if not file.exists():
+            return self.message_from_text(f"<voice {file_path}>")
+
+        media = self.parse_file_and_upload(
+            file=file,
+            file_type=4,
+            to_user_id=to_user_id,
+        )
+
+        voice_item: dict[str, Any] = {
+            "media": media,
+        }
+
+        if encode_type != 0:
+            voice_item.update({"encode_type": encode_type})
+        if bits_per_sample != 0:
+            voice_item.update({"bits_per_sample": bits_per_sample})
+        if sample_rate != 0:
+            voice_item.update({"sample_rate": sample_rate})
+        if playtime != 0:
+            voice_item.update({"playtime": playtime})
+        if text != "":
+            voice_item.update({"text": text})
+
+        return {
+            "type": 3,
+            "voice_item": voice_item,
+        }
+    
     def message_from_file(self): ...  # type 4
     def message_from_video(self): ...  # type 5
 
@@ -347,5 +386,17 @@ if __name__ == "__main__":
             logger.info(reply_resp)
 
             reply = ilink.message_from_image("cache/images/哈基耶.jpg", reply_to)
+            reply_resp = ilink.send_message(reply_to, reply_ct, reply)
+            logger.info(reply_resp)
+
+            reply = ilink.message_from_voice(
+                "cache/voices/你好啊.wav",
+                reply_to,
+                encode_type=2,
+                bits_per_sample=16,
+                sample_rate=24_000,
+                playtime=1000,
+                text="你好啊",
+            )
             reply_resp = ilink.send_message(reply_to, reply_ct, reply)
             logger.info(reply_resp)
