@@ -172,8 +172,38 @@ class ILink:
             "type": 3,
             "voice_item": voice_item,
         }
-    
-    def message_from_file(self): ...  # type 4
+
+    def message_from_file(
+        self,
+        file_path: str,
+        to_user_id: str,
+        file_name: str,
+    ) -> dict[str, Any]:
+        file = Path(file_path)
+        if not file.exists():
+            return self.message_from_text(f"<file {file_path}>")
+
+        file_md5 = hashlib.md5(file.read_bytes()).hexdigest()
+        file_len = f"{file.stat().st_size}"
+
+        media = self.parse_file_and_upload(
+            file=file,
+            file_type=3,
+            to_user_id=to_user_id,
+        )
+
+        file_item = {
+            "media": media,
+            "file_name": file_name,
+            "md5": file_md5,
+            "len": file_len,
+        }
+
+        return {
+            "type": 4,
+            "file_item": file_item,
+        }
+
     def message_from_video(self): ...  # type 5
 
     """ 工具方法：文件加解密 """
@@ -397,6 +427,14 @@ if __name__ == "__main__":
                 sample_rate=24_000,
                 playtime=1000,
                 text="你好啊",
+            )
+            reply_resp = ilink.send_message(reply_to, reply_ct, reply)
+            logger.info(reply_resp)
+
+            reply = ilink.message_from_file(
+                "cache/files/protocol-spec.md",
+                reply_to,
+                file_name="protocol - spec.md",
             )
             reply_resp = ilink.send_message(reply_to, reply_ct, reply)
             logger.info(reply_resp)
