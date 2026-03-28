@@ -113,24 +113,25 @@ class ILink:
 
     def message_from_text(self, message: str) -> dict[str, Any]:
         return {
-            "type": 1,  # 消息发送的类型 1：文字
+            "type": 1,
             "text_item": {"text": message},
         }
 
-    def message_from_image(self, file_path: str, to_user_id: str):
+    def message_from_image(self, file_path: str, to_user_id: str) -> dict[str, Any]:
         file = Path(file_path)
         if not file.exists():
             return self.message_from_text(f"<img {file_path}>")
 
-        message = self.parse_file_and_upload(
+        media = self.parse_file_and_upload(
             file=file,
             file_type=1,
-            to_file_type=2,
             to_user_id=to_user_id,
         )
-        logger.debug(message)
 
-        return message
+        return {
+            "type": 2,
+            "image_item": {"media": media},
+        }
 
     def message_from_voice(self): ...  # type 3
     def message_from_file(self): ...  # type 4
@@ -158,7 +159,6 @@ class ILink:
         self,
         file: Path,
         file_type: int,
-        to_file_type: int,
         to_user_id: str,
     ) -> dict[str, Any]:
         file_md5 = hashlib.md5(file.read_bytes()).hexdigest()
@@ -166,7 +166,7 @@ class ILink:
 
         if self.file_message_cache.get(file_cache_tag):
             file_cache: dict[str, Any] = self.file_message_cache[file_cache_tag]
-            logger.debug(f"hit cache: {file_cache}")
+            logger.debug(f"hit cache: {file_cache_tag}")
             return file_cache
 
         filekey = self.rand_file_key()
@@ -193,24 +193,19 @@ class ILink:
         )
 
         if not encrypt_query_param:
-            return self.message_from_text(f"<img {file}>")
+            return {"text": f"upload error: {file.name}"}
 
-        message: dict[str, Any] = {
-            "type": to_file_type,  # 文件发送的消息类型 1：文字 2：图片 3：语言 4：文件 5：视频
-            "image_item": {
-                "media": {
-                    "encrypt_query_param": encrypt_query_param,
-                    "aes_key": base64.b64encode(aeskey.hex().encode()).decode(),
-                    "encrypt_type": 1,
-                },
-            },
+        media = {
+            "encrypt_query_param": encrypt_query_param,
+            "aes_key": base64.b64encode(aeskey.hex().encode()).decode(),
+            "encrypt_type": 1,
         }
 
-        self.file_message_cache[file_cache_tag] = message
+        self.file_message_cache[file_cache_tag] = media
         self.save_file_message(self.file_message_cache)
-        logger.debug(message)
+        logger.debug(f"save cache: {file_cache_tag}")
 
-        return message
+        return media
 
     def upload_file_to_cdn(self, param: str, filekey: str, payload: bytes) -> str:
         url = f"{self.cdn_endpoint}/c2c/upload"
