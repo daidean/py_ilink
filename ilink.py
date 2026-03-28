@@ -4,6 +4,7 @@ import base64
 import secrets
 import hashlib
 import requests
+import pilk
 
 from typing import Any
 from pathlib import Path
@@ -261,6 +262,12 @@ class ILink:
         file_type: int,
         to_user_id: str,
     ) -> dict[str, Any]:
+        # 针对语音做特殊转换 将 wav 格式转换为 silk 格式
+        if file_type == 4 and file.as_posix().endswith(".wav"):
+            silk_path = file.as_posix().replace(".wav", ".silk")
+            pilk.encode(file.as_posix(), silk_path)
+            file = Path(silk_path)
+
         file_md5 = hashlib.md5(file.read_bytes()).hexdigest()
         file_cache_tag = f"{file_md5}|{to_user_id}"
 
