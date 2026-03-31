@@ -1,15 +1,17 @@
 import json
 from typing import Any
 from pathlib import Path
-from loguru import logger
+
+
+cache_dir = Path(__file__).parent / "cache"
 
 
 class CacheManager:
     def __init__(
         self,
-        login_info_path: str = "cache/bot_login_info.json",
-        typing_ticket_path: str = "cache/bot_typing_ticket.json",
-        file_message_path: str = "cache/bot_upload_files.json",
+        login_info_path: str = f"{cache_dir}/bot_login_info.json",
+        typing_ticket_path: str = f"{cache_dir}/bot_typing_ticket.json",
+        file_message_path: str = f"{cache_dir}/bot_upload_files.json",
     ) -> None:
         self.login_info_path = Path(login_info_path)
         self.typing_ticket_path = Path(typing_ticket_path)

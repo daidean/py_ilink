@@ -18,16 +18,8 @@ class ILinkClient:
     endpoint: str = "https://ilinkai.weixin.qq.com"
     cdn_endpoint: str = "https://novac2c.cdn.weixin.qq.com"
 
-    def __init__(
-        self,
-        cache_dir: str = "cache",
-    ) -> None:
-        self.cache = CacheManager(
-            login_info_path=f"{cache_dir}/bot_login_info.json",
-            typing_ticket_path=f"{cache_dir}/bot_typing_ticket.json",
-            file_message_path=f"{cache_dir}/bot_upload_files.json",
-        )
-
+    def __init__(self) -> None:
+        self.cache = CacheManager()
         self.auth = AuthManager(self.endpoint)
         self.api = APIClient(self.endpoint)
         self.cdn = CDNClient(self.cdn_endpoint)
@@ -48,7 +40,8 @@ class ILinkClient:
             )
             logger.info("BOT登录, 已加载登录缓存")
         else:
-            logger.warning("BOT登录, 未找到登录缓存")
+            login_info = self.login()
+            self.save_login_info(login_info)
 
     def login(self) -> dict[str, Any]:
         login_info = self.auth.login()
@@ -124,7 +117,7 @@ class ILinkClient:
         if file_type == 4 and file.as_posix().endswith(".wav"):
             if pilk is None:
                 logger.error("pilk library not installed, cannot convert wav to silk")
-                return {"text": f"upload error: pilk not installed"}
+                return {"text": "upload error: pilk not installed"}
             silk_path = file.as_posix().replace(".wav", ".silk")
             pilk.encode(file.as_posix(), silk_path)
             file = Path(silk_path)
